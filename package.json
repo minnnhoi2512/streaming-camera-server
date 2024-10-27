@@ -1,0 +1,21 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+     "prestart": "bash run-ffmpeg.sh",
+     "dev": "bash run-ffmpeg.sh && node hls-server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.1",
+    "ffmpeg-static": "^5.2.0",
+    "find-remove": "^3.1.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "nodemon": "^2.0.7"
+  }
+}
