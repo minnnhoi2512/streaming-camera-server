@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
      "prestart": "bash run-ffmpeg.sh",
-     "dev": "bash run-ffmpeg.sh && node hls-server.js"
+     "dev": "node hls-server.js"
   },
   "keywords": [],
   "author": "",
