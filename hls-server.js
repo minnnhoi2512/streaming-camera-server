@@ -27,10 +27,44 @@ http
       return;
     }
 
-    // Resolve the file path
-    const filePath = "./libs" + request.url;
-    const videoFolderPath = path.join(__dirname, "outputVideo");
+    // Check if the request is for the number of files in the outputVideo directory
+    if (request.url === "/count-files") {
+      const videoFolderPath = path.join(__dirname, "outputVideo");
+      
+      fs.readdir(videoFolderPath, (error, files) => {
+        if (error) {
+          response.writeHead(500, { "Content-Type": "text/plain" });
+          response.end(`Error reading directory: ${error.message}`);
+          return;
+        }
+        
+        // Filter out only files (ignore directories)
+        const fileCount = files.filter(file => fs.statSync(path.join(videoFolderPath, file)).isFile()).length;
 
+        response.writeHead(200, { "Content-Type": "application/json", ...headers });
+        response.end(JSON.stringify({ count: fileCount }), "utf-8");
+      });
+      return;
+    }
+
+    // Check if the request is for the index file in the outputVideo directory
+    if (request.url === "/" || request.url === "/index.html") {
+      const indexPath = path.join(__dirname, "outputVideo", "index.html");
+      fs.readFile(indexPath, (error, content) => {
+        if (error) {
+          response.writeHead(500, { "Content-Type": "text/plain" });
+          response.end(`Error reading index file: ${error.message}`);
+        } else {
+          response.writeHead(200, { "Content-Type": "text/html", ...headers });
+          response.end(content, "utf-8");
+        }
+      });
+      return;
+    }
+
+    // Resolve the file path for video requests
+    const videoFolderPath = path.join(__dirname, "outputVideo");
+    
     // Check if the request is for a video file in the ./outputVideo directory
     if (request.url.startsWith("/video")) {
       const videoFilePath = path.join(videoFolderPath, path.basename(request.url));
@@ -88,6 +122,7 @@ http
     }
 
     // Fallback to reading other files
+    const filePath = "./libs" + request.url;
     fs.readFile(filePath, function (error, content) {
       if (error) {
         if (error.code === "ENOENT") {
