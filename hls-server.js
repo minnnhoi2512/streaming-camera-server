@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
-
-const PORT = 4000;
+const findRemoveSync = require('find-remove');
+const PORT = 9000;
 const app = express();
 
 // Set the path for ffmpeg
@@ -30,6 +30,11 @@ http.createServer(function (request, response) {
 
     const filePath = './libs' + request.url;
     console.log(filePath);
+	if (filePath === path.join(__dirname, 'libs', 'index.ts')) {
+        // Call findRemoveSync to remove .ts files older than 30 seconds
+        var result = findRemoveSync('./libs', { age: { seconds: 30 }, extensions: '.ts' });
+        console.log('Removed files:', result);
+    }
 
     fs.readFile(filePath, function (error, content) {
         if (error) {

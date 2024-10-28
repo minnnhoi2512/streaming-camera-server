@@ -6,8 +6,8 @@ node ./cleaner.js &
 # Store the PID of the cleaner.js process
 CLEANER_PID=$!
 
-# Wait for 5 seconds
-sleep 5
+# Wait for 20 seconds
+sleep 25
 
 # Stop the cleaner.js process
 kill $CLEANER_PID
