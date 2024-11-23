@@ -5,7 +5,7 @@ const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const findRemoveSync = require("find-remove");
 const dotenv = require("dotenv");
-const PORT = 9000;
+const PORT = 9001;
 const app = express();
 
 // Load environment variables from .env file
@@ -32,6 +32,8 @@ function captureLatestImage(rtspUrl, outputDir, callback) {
   const outputPath = path.join(outputDir, 'latest.jpg');
 
   ffmpeg(rtspUrl)
+    .inputOptions('-rtsp_transport tcp') // Use TCP for RTSP transport
+    .outputOptions('-map 0:v:0') // Explicitly map the video stream
     .frames(1)
     .output(outputPath)
     .on('start', (commandLine) => {
@@ -43,17 +45,16 @@ function captureLatestImage(rtspUrl, outputDir, callback) {
     })
     .on('error', (err, stdout, stderr) => {
       console.error('Error capturing image:', err.message);
-      console.error('ffmpeg stdout:', stdout);
-      console.error('ffmpeg stderr:', stderr);
+      console.error('FFmpeg stdout:', stdout);
+      console.error('FFmpeg stderr:', stderr);
       callback(err);
     })
     .run();
 }
-
 // Route to capture the latest image from RTSP stream for camera 1
-app.get("/camera-1/capture-image", (req, res) => {
-  const rtspUrl = process.env.CAMERA_RTSP_1; // Replace with your RTSP stream URL
-  const outputDir = path.join(__dirname, 'outputImages-camera-1');
+app.get("/capture-image", (req, res) => {
+  const rtspUrl = "rtsp://admin:JZYWOH@nmp160.myvnc.com:61554"; // Replace with your RTSP stream URL
+  const outputDir = path.join(__dirname, 'captureImage');
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir);
   }
@@ -66,24 +67,6 @@ app.get("/camera-1/capture-image", (req, res) => {
     }
   });
 });
-
-// Route to capture the latest image from RTSP stream for camera 2
-app.get("/camera-2/capture-image", (req, res) => {
-  const rtspUrl = process.env.CAMERA_RTSP_2; // Replace with your RTSP stream URL
-  const outputDir = path.join(__dirname, 'outputImages-camera-2');
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir);
-  }
-
-  captureLatestImage(rtspUrl, outputDir, (err, imagePath) => {
-    if (err) {
-      res.status(500).send(`Failed to capture image: ${err.message}`);
-    } else {
-      res.sendFile(imagePath);
-    }
-  });
-});
-
 // Route to serve the index file
 app.get(["/", "/index.html"], (req, res) => {
   const indexPath = path.join(__dirname, "outputVideo", "index.html");

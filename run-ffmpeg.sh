@@ -22,7 +22,7 @@ fi
 cd libs || { echo "Failed to change directory to libs"; exit 1; }
 
 # Run the ffmpeg command
-ffmpeg -i rtsp://admin:TGODTO@tools.kozow.com:61554 -fflags flush_packets -max_delay 2 -flags +global_header -hls_time 2 -hls_list_size 3 -vcodec copy -y index.m3u8
+ffmpeg -i rtsp://admin:FYYGCU@nmp160.myvnc.com:62554 -fflags flush_packets -max_delay 2 -flags +global_header -hls_time 2 -hls_list_size 3 -vcodec copy -y index.m3u8
 
 # Check if ffmpeg command was successful
 if [ $? -ne 0 ]; then
