@@ -23,5 +23,3 @@ wait $FFMPEG_PID
 wait $SERVER_PID
 
 echo "Both scripts have completed."
-
-bash run-convert-mp4.sh

@@ -1,1 +1,0 @@
-sleep 35 && ffmpeg -i "https://security-gateway-camera.tools.kozow.com/index.m3u8" -c copy -f segment -segment_time 15 -reset_timestamps 1 -segment_format mp4 -segment_format_options movflags=+faststart "./outputVideo/output_%d.mp4"

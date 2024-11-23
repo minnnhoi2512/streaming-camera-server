@@ -1,150 +1,137 @@
 const express = require("express");
-const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
 const findRemoveSync = require("find-remove");
+const dotenv = require("dotenv");
 const PORT = 9000;
 const app = express();
+
+// Load environment variables from .env file
+dotenv.config();
 
 // Set the path for ffmpeg
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// Create HTTP server
-http
-  .createServer(function (request, response) {
-    const headers = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "OPTIONS, POST, GET",
-      "Access-Control-Max-Age": 2592000, // 30 days
-    };
+// Middleware to handle CORS
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "OPTIONS, POST, GET");
+  res.header("Access-Control-Max-Age", 2592000); // 30 days
+  next();
+});
 
-    // Handle OPTIONS preflight requests
-    if (request.method === "OPTIONS") {
-      response.writeHead(204, headers);
-      response.end();
-      return;
+// Handle OPTIONS preflight requests
+app.options("*", (req, res) => {
+  res.sendStatus(204);
+});
+
+// Function to capture the latest image from RTSP stream
+function captureLatestImage(rtspUrl, outputDir, callback) {
+  const outputPath = path.join(outputDir, 'latest.jpg');
+
+  ffmpeg(rtspUrl)
+    .frames(1)
+    .output(outputPath)
+    .on('start', (commandLine) => {
+      console.log('Spawned Ffmpeg with command: ' + commandLine);
+    })
+    .on('end', () => {
+      console.log('Image captured successfully');
+      callback(null, outputPath);
+    })
+    .on('error', (err, stdout, stderr) => {
+      console.error('Error capturing image:', err.message);
+      console.error('ffmpeg stdout:', stdout);
+      console.error('ffmpeg stderr:', stderr);
+      callback(err);
+    })
+    .run();
+}
+
+// Route to capture the latest image from RTSP stream for camera 1
+app.get("/camera-1/capture-image", (req, res) => {
+  const rtspUrl = process.env.CAMERA_RTSP_1; // Replace with your RTSP stream URL
+  const outputDir = path.join(__dirname, 'outputImages-camera-1');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir);
+  }
+
+  captureLatestImage(rtspUrl, outputDir, (err, imagePath) => {
+    if (err) {
+      res.status(500).send(`Failed to capture image: ${err.message}`);
+    } else {
+      res.sendFile(imagePath);
     }
+  });
+});
 
-    // Check if the request is for the number of files in the outputVideo directory
-    if (request.url === "/count-files") {
-      const videoFolderPath = path.join(__dirname, "outputVideo");
-      
-      fs.readdir(videoFolderPath, (error, files) => {
-        if (error) {
-          response.writeHead(500, { "Content-Type": "text/plain" });
-          response.end(`Error reading directory: ${error.message}`);
-          return;
-        }
-        
-        // Filter out only files (ignore directories)
-        const fileCount = files.filter(file => fs.statSync(path.join(videoFolderPath, file)).isFile()).length;
+// Route to capture the latest image from RTSP stream for camera 2
+app.get("/camera-2/capture-image", (req, res) => {
+  const rtspUrl = process.env.CAMERA_RTSP_2; // Replace with your RTSP stream URL
+  const outputDir = path.join(__dirname, 'outputImages-camera-2');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir);
+  }
 
-        response.writeHead(200, { "Content-Type": "application/json", ...headers });
-        response.end(JSON.stringify({ count: fileCount }), "utf-8");
-      });
-      return;
+  captureLatestImage(rtspUrl, outputDir, (err, imagePath) => {
+    if (err) {
+      res.status(500).send(`Failed to capture image: ${err.message}`);
+    } else {
+      res.sendFile(imagePath);
     }
+  });
+});
 
-    // Check if the request is for the index file in the outputVideo directory
-    if (request.url === "/" || request.url === "/index.html") {
-      const indexPath = path.join(__dirname, "outputVideo", "index.html");
-      fs.readFile(indexPath, (error, content) => {
-        if (error) {
-          response.writeHead(500, { "Content-Type": "text/plain" });
-          response.end(`Error reading index file: ${error.message}`);
-        } else {
-          response.writeHead(200, { "Content-Type": "text/html", ...headers });
-          response.end(content, "utf-8");
-        }
-      });
-      return;
+// Route to serve the index file
+app.get(["/", "/index.html"], (req, res) => {
+  const indexPath = path.join(__dirname, "outputVideo", "index.html");
+  fs.readFile(indexPath, (error, content) => {
+    if (error) {
+      res.status(500).send(`Error reading index file: ${error.message}`);
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.send(content);
     }
+  });
+});
 
-    // Resolve the file path for video requests
-    const videoFolderPath = path.join(__dirname, "outputVideo");
-    
-    // Check if the request is for a video file in the ./outputVideo directory
-    if (request.url.startsWith("/video")) {
-      const videoFilePath = path.join(videoFolderPath, path.basename(request.url));
+// Route to handle .ts files and other static files
+app.get("/libs/:filename", (req, res) => {
+  const filePath = path.join(__dirname, "libs", req.params.filename);
 
-      // Check if the video file exists
-      if (fs.existsSync(videoFilePath)) {
-        const stat = fs.statSync(videoFilePath);
-        const fileSize = stat.size;
-        const range = request.headers.range;
-
-        if (range) {
-          // Handle partial content requests for streaming
-          const parts = range.replace(/bytes=/, "").split("-");
-          const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-          const chunksize = end - start + 1;
-          const file = fs.createReadStream(videoFilePath, { start, end });
-
-          const videoHeaders = {
-            "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-            "Accept-Ranges": "bytes",
-            "Content-Length": chunksize,
-            "Content-Type": "video/mp4",
-            ...headers,
-          };
-
-          response.writeHead(206, videoHeaders);
-          file.pipe(response);
-        } else {
-          // Serve the whole file
-          const videoHeaders = {
-            "Content-Length": fileSize,
-            "Content-Type": "video/mp4",
-            ...headers,
-          };
-          response.writeHead(200, videoHeaders);
-          fs.createReadStream(videoFilePath).pipe(response);
-        }
-        return;
-      } else {
-        response.writeHead(404, { "Content-Type": "text/plain" });
-        response.end("Video file not found");
-        return;
-      }
-    }
-
-    // Handle .ts files and other static files
-    if (filePath === path.join(__dirname, "libs", "index.ts")) {
-      // Remove .ts files older than 30 seconds
-      var result = findRemoveSync("./libs", {
-        age: { seconds: 30 },
-        extensions: ".ts",
-      });
-      console.log("Removed files:", result);
-    }
-
-    // Fallback to reading other files
-    const filePath = "./libs" + request.url;
-    fs.readFile(filePath, function (error, content) {
-      if (error) {
-        if (error.code === "ENOENT") {
-          fs.readFile("./404.html", function (error404, content404) {
-            response.writeHead(404, {
-              "Content-Type": "text/html",
-              ...headers,
-            });
-            response.end(content404, "utf-8");
-          });
-        } else {
-          response.writeHead(500, { ...headers });
-          response.end(
-            `Sorry, check with the site admin for error: ${error.code} ..\n`
-          );
-        }
-      } else {
-        response.writeHead(200, { "Content-Type": "text/html", ...headers });
-        response.end(content, "utf-8");
-      }
+  if (filePath === path.join(__dirname, "libs", "index.ts")) {
+    const result = findRemoveSync("./libs", {
+      age: { seconds: 30 },
+      extensions: ".ts",
     });
-  })
-  .listen(PORT);
+    console.log("Removed files:", result);
+  }
 
-console.log(`Server listening on PORT ${PORT}`);
+  fs.readFile(filePath, (error, content) => {
+    if (error) {
+      if (error.code === "ENOENT") {
+        fs.readFile("./404.html", (error404, content404) => {
+          res.status(404).send(content404);
+        });
+      } else {
+        res.status(500).send(`Sorry, check with the site admin for error: ${error.code}`);
+      }
+    } else {
+      res.setHeader("Content-Type", "text/html");
+      res.send(content);
+    }
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server listening on PORT ${PORT}`);
+});
